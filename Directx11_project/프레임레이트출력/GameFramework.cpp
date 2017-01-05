@@ -1,6 +1,7 @@
 #include "stdafx.h"
 #include "GameFramework.h"
 
+
 CGameFramework::CGameFramework()
 {
 	m_pd3dDevice = NULL;
@@ -10,6 +11,9 @@ CGameFramework::CGameFramework()
 
 	m_nWndClientWidth = FRAME_BUFFER_WIDTH;
 	m_nWndClientHeight = FRAME_BUFFER_HEIGHT;
+
+	m_pScene = NULL;
+	_tcscpy_s(m_pszBuffer, _T("LapProject ("));
 }
 
 CGameFramework::~CGameFramework()
@@ -197,10 +201,16 @@ void CGameFramework::OnDestroy()
 
 void CGameFramework::BuildObjects()
 {
+	//CScene 클래스 객체를 생성하고 CScene 클래스 객체의 BuildObjects() 멤버 함수를 호출한다.
+	m_pScene = new CScene();
+	if (m_pScene) m_pScene->BuildObjects(m_pd3dDevice);
+
 }
 
 void CGameFramework::ReleaseObjects()
 {
+	if (m_pScene) m_pScene->ReleaseObjects();
+	if (m_pScene) delete m_pScene;
 }
 
 void CGameFramework::ProcessInput()
@@ -209,16 +219,27 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects()
 {
+	if (m_pScene) m_pScene->AnimateObjects(m_GameTimer.GetTimeElapsed());
 }
 
 void CGameFramework::FrameAdvance()
 {
+	//타이머의 시간이 갱신되도록 하고 프레임 레이트를 계산한다. 
+	m_GameTimer.Tick();
+
 	ProcessInput();
+
 	AnimateObjects();
 
 	float fClearColor[4] = { 0.0f, 0.125f, 0.3f, 1.0f };
-	//렌더 타겟 뷰를 색상(RGB: 0.0f, 0.125f, 0.3f)으로 지운다. 
 	m_pd3dDeviceContext->ClearRenderTargetView(m_pd3dRenderTargetView, fClearColor);
-	//후면버퍼를 전면버퍼로 프리젠트한다. 
+	if (m_pScene) m_pScene->Render(m_pd3dDeviceContext);
 	m_pDXGISwapChain->Present(0, 0);
+
+	/*현재의 프레임 레이트를 문자열로 가져와서 주 윈도우의 타이틀로 출력한다. m_pszBuffer 문자열이 "LapProject ("으로 초기화되었으므로 (m_pszBuffer+12)에서부터 프레임 레이트를 문자열로 출력하여 “ FPS)” 문자열과 합친다.
+	_itow_s(m_nCurrentFrameRate, (m_pszBuffer+12), 37, 10);
+	wcscat_s((m_pszBuffer+12), 37, _T(" FPS)"));
+	*/
+	m_GameTimer.GetFrameRate(m_pszBuffer + 12, 37);
+	::SetWindowText(m_hWnd, m_pszBuffer);
 }

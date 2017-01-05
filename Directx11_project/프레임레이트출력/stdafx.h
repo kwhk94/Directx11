@@ -13,12 +13,17 @@
 
 // C 런타임 헤더 파일입니다.
 #include <stdlib.h>
+
+#include <stdio.h>
 #include <malloc.h>
 #include <memory.h>
 #include <tchar.h>
 
 #include <d3d11.h>
 #include <d3dx11.h>
+
+#include <mmsystem.h>				 //시간관련 라이브러리
+#include <math.h>
 
 #define FRAME_BUFFER_WIDTH	640
 #define FRAME_BUFFER_HEIGHT	480
