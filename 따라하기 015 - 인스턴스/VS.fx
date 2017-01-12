@@ -2,8 +2,8 @@ struct VS_INSTANCED_COLOR_INPUT
 {
 	float3 position : POSITION;
 	float4 color : COLOR0;
-	//정점 쉐이더에 전달되는 객체 인스턴스의 위치 벡터이다.
-	float3 instancePos : POSINSTANCE;
+	column_major float4x4 mtxTransform : INSTANCEPOS;
+	float4 instanceColor : INSTANCECOLOR;
 };
 struct VS_INSTANCED_COLOR_OUTPUT
 {
@@ -38,23 +38,13 @@ struct VS_OUTPUT
 VS_INSTANCED_COLOR_OUTPUT VSInstancedDiffusedColor(VS_INSTANCED_COLOR_INPUT input, uint instanceID : SV_InstanceID)
 {
 	VS_INSTANCED_COLOR_OUTPUT output = (VS_INSTANCED_COLOR_OUTPUT)0;
-	//정점의 위치 벡터에 인스턴스의 위치 벡터(월드 좌표)를 더한다.
-	//output.position = input.position + float4(input.instancePos, 0.0f); //OK
-	//output.position = float4(input.position, 1.0f) + input.instancePos; //OK
-	//output.position = input.position + float4(input.instancePos, 1.0f); //OK
-	//output.position = float4(input.position, 0.0f) + float4(input.instancePos, 1.0f); //OK
-	output.position = float4(input.position, 1.0f) + float4(input.instancePos, 0.0f); //OK
+	output.position = mul(float4(input.position, 1), input.mtxTransform);
 	output.position = mul(output.position, gmtxView);
 	output.position = mul(output.position, gmtxProjection);
-	output.color = input.color;
-	//인스턴스 ID를 픽셀 쉐이더로 전달한다.
+	output.color = (instanceID % 5) ? input.color : (input.color * 0.3f + input.instanceColor * 0.7f);
 	output.instanceID = instanceID;
 	return output;
 }
-
-
-
-
 
 
 VS_OUTPUT VS(VS_INPUT input)

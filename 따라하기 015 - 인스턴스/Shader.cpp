@@ -266,23 +266,31 @@ void CPlayerShader::Render(ID3D11DeviceContext *pd3dDeviceContext, CCamera *pCam
 
 CInstancingShader::CInstancingShader()
 {
-	m_pd3dCubeInstanceBuffer = NULL;
-	m_pd3dSphereInstanceBuffer = NULL;
+	m_pd3dCubeInstanceMatrixBuffer = NULL;
+	m_pd3dCubeInstanceColorBuffer = NULL;
+	m_pd3dSphereInstanceMatrixBuffer = NULL;
+	m_pd3dSphereInstanceColorBuffer = NULL;
 }
 
 CInstancingShader::~CInstancingShader()
 {
-	if (m_pd3dCubeInstanceBuffer) m_pd3dCubeInstanceBuffer->Release();
-	if (m_pd3dSphereInstanceBuffer) m_pd3dSphereInstanceBuffer->Release();
+	if (m_pd3dCubeInstanceMatrixBuffer) m_pd3dCubeInstanceMatrixBuffer->Release();
+	if (m_pd3dCubeInstanceColorBuffer) m_pd3dCubeInstanceColorBuffer->Release();
+	if (m_pd3dSphereInstanceMatrixBuffer) m_pd3dSphereInstanceMatrixBuffer->Release();
+	if (m_pd3dSphereInstanceColorBuffer) m_pd3dSphereInstanceColorBuffer->Release();
 }
+
 void CInstancingShader::CreateShader(ID3D11Device *pd3dDevice)
 {
 	D3D11_INPUT_ELEMENT_DESC d3dInputLayout[] =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-		//인스턴스 데이터는 위치 벡터(32비트 실수 3개)이고 인스턴스마다 정점 쉐이더에 하나씩 전달된다.
-		{ "POSINSTANCE", 0, DXGI_FORMAT_R32G32B32_FLOAT, 2, 0, D3D11_INPUT_PER_INSTANCE_DATA, 1 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 1, 0 , D3D11_INPUT_PER_VERTEX_DATA, 0 },
+		{ "INSTANCEPOS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, 0, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INSTANCEPOS", 1, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INSTANCEPOS", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INSTANCEPOS", 3, DXGI_FORMAT_R32G32B32A32_FLOAT, 2, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_INSTANCE_DATA, 1 },
+		{ "INSTANCECOLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 3, 0 , D3D11_INPUT_PER_INSTANCE_DATA, 1 }
 	};
 	UINT nElements = ARRAYSIZE(d3dInputLayout);
 	
@@ -309,11 +317,11 @@ ID3D11Buffer *CInstancingShader::CreateInstanceBuffer(ID3D11Device *pd3dDevice, 
 
 void CInstancingShader::BuildObjects(ID3D11Device *pd3dDevice)
 {
-	//인스턴싱 데이터는 위치 벡터이므로 인스턴싱 버퍼의 원소의 크기는 벡터 크기이다.
-	m_nInstanceBufferStride = sizeof(D3DXVECTOR3);
-	m_nInstanceBufferOffset = 0;
+	m_nInstanceMatrixBufferStride = sizeof(D3DXMATRIX);
+	m_nInstanceColorBufferStride = sizeof(D3DXCOLOR);
+	m_nInstanceMatrixBufferOffset = 0;
+	m_nInstanceColorBufferOffset = 0;
 
-	//인스턴싱할 객체는 큐브와 구들이다..
 	int xObjects = 10, yObjects = 10, zObjects = 10, i = 0;
 	int nCubeObjects = (xObjects * 2 + 1) * (yObjects * 2 + 1) * (zObjects * 2 + 1);
 	int nSphereObjects = 8 * 2;
@@ -327,40 +335,34 @@ void CInstancingShader::BuildObjects(ID3D11Device *pd3dDevice)
 	float fyPitch = 12.0f * 2.5f;
 	float fzPitch = 12.0f * 2.5f;
 	CRotatingObject *pRotatingObject = NULL;
-	for (int x = -xObjects; x <= xObjects; x++)
-	{
-		for (int y = -yObjects; y <= yObjects; y++)
+		for (int x = -xObjects; x <= xObjects; x++)
 		{
-			for (int z = -zObjects; z <= zObjects; z++)
+			for (int y = -yObjects; y <= yObjects; y++)
 			{
-				pRotatingObject = new CRotatingObject();
-				pRotatingObject->SetMesh(pCubeMesh);
-				pRotatingObject->SetPosition(fxPitch*x, fyPitch*y, fzPitch*z);
-				pRotatingObject->SetRotationAxis(D3DXVECTOR3(0.0f, 1.0f, 0.0f));
-				pRotatingObject->SetRotationSpeed(10.0f*(i % 10));
-				m_ppObjects[i++] = pRotatingObject;
+				for (int z = -zObjects; z <= zObjects; z++)
+				{
+					pRotatingObject = new CRotatingObject();
+					pRotatingObject->SetMesh(pCubeMesh);
+					pRotatingObject->SetPosition(fxPitch*x, fyPitch*y, fzPitch*z);
+					pRotatingObject->SetRotationAxis(D3DXVECTOR3(0.0f, 1.0f, 0.0f));
+					pRotatingObject->SetRotationSpeed(10.0f*(i % 10));
+					m_ppObjects[i++] = pRotatingObject;
+				}
 			}
 		}
-	}
-
-	//큐브들의 위치 벡터를 인스턴싱 버퍼를 생성하여 초기화한다.
-	D3DXVECTOR3 *pd3dxvCubePositions = new D3DXVECTOR3[nCubeObjects];
-	for (int j = 0; j < nCubeObjects; j++) pd3dxvCubePositions[j] = m_ppObjects[j]->GetPosition();
-	m_pd3dCubeInstanceBuffer = CreateInstanceBuffer(pd3dDevice, nCubeObjects, m_nInstanceBufferStride, pd3dxvCubePositions);
-	delete[] pd3dxvCubePositions;
-
-	/*인스턴싱 버퍼를 직육면체 메쉬의 정점 버퍼에 추가한다. 이제 메쉬는 정점 데이터와 인스턴스 데이터를 가진다.*/
-	pCubeMesh->AssembleToVertexBuffer(1, &m_pd3dCubeInstanceBuffer, &m_nInstanceBufferStride, &m_nInstanceBufferOffset);
+	m_pd3dCubeInstanceMatrixBuffer = CreateInstanceBuffer(pd3dDevice, nCubeObjects, m_nInstanceMatrixBufferStride, NULL);
+	m_pd3dCubeInstanceColorBuffer = CreateInstanceBuffer(pd3dDevice, nCubeObjects, m_nInstanceColorBufferStride, NULL);
+	pCubeMesh->AssembleToVertexBuffer(1, &m_pd3dCubeInstanceMatrixBuffer, &m_nInstanceMatrixBufferStride, &m_nInstanceMatrixBufferOffset);
+	pCubeMesh->AssembleToVertexBuffer(1, &m_pd3dCubeInstanceColorBuffer, &m_nInstanceColorBufferStride, &m_nInstanceColorBufferOffset);
 
 	CSphereMesh *pSphereMesh = new CSphereMesh(pd3dDevice, 12.0f, 20, 20, D3DCOLOR_XRGB(64, 0, 0));
 
 	CRevolvingObject *pRevolvingObject = NULL;
-	float fRadius = (xObjects * fxPitch * 2.0f) * 1.5f;
+		float fRadius = (xObjects * fxPitch * 2.0f) * 1.5f;
 	for (int j = 0; j < 8; j++)
 	{
 		pRevolvingObject = new CRevolvingObject();
-		pRevolvingObject->SetMesh(pSphereMesh);
-		pRevolvingObject->SetPosition(fRadius*cosf((float)D3DXToRadian(45.0f)*j), fRadius*sinf((float)D3DXToRadian(45.0f)*j), 0.0f);
+		pRevolvingObject->SetMesh(pSphereMesh);		pRevolvingObject->SetPosition(fRadius*cosf((float)D3DXToRadian(45.0f)*j), fRadius*sinf((float)D3DXToRadian(45.0f)*j), 0.0f);
 		pRevolvingObject->SetRevolutionAxis(D3DXVECTOR3(0.0f, 0.0f, 1.0f));
 		pRevolvingObject->SetRevolutionSpeed(10.0f);
 		m_ppObjects[i++] = pRevolvingObject;
@@ -374,15 +376,10 @@ void CInstancingShader::BuildObjects(ID3D11Device *pd3dDevice)
 		pRevolvingObject->SetRevolutionSpeed(20.0f);
 		m_ppObjects[i++] = pRevolvingObject;
 	}
-
-	//구들의 위치 벡터를 인스턴싱 버퍼를 생성하여 초기화한다.
-	D3DXVECTOR3 *pd3dxvSpherePositions = new D3DXVECTOR3[nSphereObjects];
-	for (int j = 0; j < nSphereObjects; j++) pd3dxvSpherePositions[j] = m_ppObjects[nCubeObjects + j]->GetPosition();
-	m_pd3dSphereInstanceBuffer = CreateInstanceBuffer(pd3dDevice, nSphereObjects, m_nInstanceBufferStride, pd3dxvSpherePositions);
-	delete[] pd3dxvSpherePositions;
-
-	/*인스턴싱 버퍼를 구 메쉬의 정점 버퍼에 추가한다. 이제 메쉬는 정점 데이터와 인스턴스 데이터를 가진다.*/
-	pSphereMesh->AssembleToVertexBuffer(1, &m_pd3dSphereInstanceBuffer, &m_nInstanceBufferStride, &m_nInstanceBufferOffset);
+	m_pd3dSphereInstanceMatrixBuffer = CreateInstanceBuffer(pd3dDevice, nSphereObjects, m_nInstanceMatrixBufferStride, NULL);
+	m_pd3dSphereInstanceColorBuffer = CreateInstanceBuffer(pd3dDevice, nSphereObjects, m_nInstanceColorBufferStride, NULL);
+	pSphereMesh->AssembleToVertexBuffer(1, &m_pd3dCubeInstanceMatrixBuffer, &m_nInstanceMatrixBufferStride, &m_nInstanceMatrixBufferOffset);
+	pSphereMesh->AssembleToVertexBuffer(1, &m_pd3dCubeInstanceColorBuffer, &m_nInstanceColorBufferStride, &m_nInstanceColorBufferOffset);
 }
 
 void CInstancingShader::Render(ID3D11DeviceContext *pd3dDeviceContext, CCamera *pCamera)
@@ -393,9 +390,31 @@ void CInstancingShader::Render(ID3D11DeviceContext *pd3dDeviceContext, CCamera *
 	int nCubeObjects = m_nObjects - nSphereObjects;
 
 	CMesh *pCubeMesh = m_ppObjects[0]->GetMesh();
+	CMesh *pSphereMesh = m_ppObjects[m_nObjects - 1]->GetMesh();
+
+	D3D11_MAPPED_SUBRESOURCE d3dMappedResource;
+	pd3dDeviceContext->Map(m_pd3dCubeInstanceMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &d3dMappedResource);
+	D3DXMATRIX *pd3dxmtxCubes = (D3DXMATRIX *)d3dMappedResource.pData;
+	for (int j = 0; j < nCubeObjects; j++) D3DXMatrixTranspose(&pd3dxmtxCubes[j], &m_ppObjects[j]->m_d3dxmtxWorld);
+	pd3dDeviceContext->Unmap(m_pd3dCubeInstanceMatrixBuffer, 0);
+
+	pd3dDeviceContext->Map(m_pd3dCubeInstanceColorBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &d3dMappedResource);
+	D3DXCOLOR *pd3dxcCubeColors = (D3DXCOLOR *)d3dMappedResource.pData;
+	for (int j = 0; j < nCubeObjects; j++) pd3dxcCubeColors[j] = (j % 2) ? D3DXCOLOR(1.0f, 0.0f, 0.0f, 1.0f) : RANDOM_COLOR;
+	pd3dDeviceContext->Unmap(m_pd3dCubeInstanceColorBuffer, 0);
+
 	pCubeMesh->RenderInstanced(pd3dDeviceContext, nCubeObjects, 0);
 
-	CMesh *pSphereMesh = m_ppObjects[m_nObjects - 1]->GetMesh();
+	pd3dDeviceContext->Map(m_pd3dSphereInstanceMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &d3dMappedResource);
+	D3DXMATRIX *pd3dxmtxSpheres = (D3DXMATRIX *)d3dMappedResource.pData;
+	for (int j = nCubeObjects; j < m_nObjects; j++) D3DXMatrixTranspose(&pd3dxmtxSpheres[j - nCubeObjects], &m_ppObjects[j]->m_d3dxmtxWorld);
+	pd3dDeviceContext->Unmap(m_pd3dSphereInstanceMatrixBuffer, 0);
+
+	pd3dDeviceContext->Map(m_pd3dSphereInstanceColorBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &d3dMappedResource);
+	D3DXCOLOR *pd3dxcSphereColors = (D3DXCOLOR *)d3dMappedResource.pData;
+	for (int j = nCubeObjects; j < m_nObjects; j++) pd3dxcSphereColors[j - nCubeObjects] = RANDOM_COLOR;
+	pd3dDeviceContext->Unmap(m_pd3dSphereInstanceColorBuffer, 0);
+
 	pSphereMesh->RenderInstanced(pd3dDeviceContext, nSphereObjects, 0);
 }
 

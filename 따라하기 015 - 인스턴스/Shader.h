@@ -96,6 +96,22 @@ public:
 	virtual void Render(ID3D11DeviceContext *pd3dDeviceContext, CCamera *pCamera);
 
 private:
+	//월드변환 행렬 인스턴싱 정점 버퍼의 한 원소의 크기(바이트)와 오프셋이다.
+	UINT m_nInstanceMatrixBufferStride;
+	UINT m_nInstanceMatrixBufferOffset;
+	//색상 인스턴싱 정점 버퍼의 한 원소의 크기(바이트)와 오프셋이다.
+	UINT m_nInstanceColorBufferStride;
+	UINT m_nInstanceColorBufferOffset;
+
+	//직육면체의 인스턴싱 정점 버퍼(월드변환 행렬)이다.
+	ID3D11Buffer *m_pd3dCubeInstanceMatrixBuffer;
+	//직육면체의 인스턴싱 정점 버퍼(색상)이다.
+	ID3D11Buffer *m_pd3dCubeInstanceColorBuffer;
+	//구의 인스턴싱 정점 버퍼(월드변환 행렬)이다.
+	ID3D11Buffer *m_pd3dSphereInstanceMatrixBuffer;
+	//구의 인스턴싱 정점 버퍼(색상)이다.
+	ID3D11Buffer *m_pd3dSphereInstanceColorBuffer;
+
 	//인스턴싱 버퍼의 원소 크기와 버퍼 오프셋이다.
 	UINT m_nInstanceBufferStride;
 	UINT m_nInstanceBufferOffset;
